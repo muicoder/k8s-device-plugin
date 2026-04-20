@@ -1,0 +1,86 @@
+---
+apiVersion: v1
+data:
+  aio.yaml: |
+    flags:
+      deviceDiscoveryStrategy: auto # auto / nvml / tegra / vfio
+      migStrategy: none # none / single / mixed
+      useNodeFeatureAPI: false
+      plugin:
+      gfd:
+        noTimestamp: true
+        oneshot: true
+    version: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin
+  namespace: default
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin
+  namespace: default
+spec:
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nvidia-device-plugin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nvidia-device-plugin
+    spec:
+      containers:
+        - command:
+            - sh
+            - -ec
+            - if 2>/dev/null gpu-feature-discovery --config-file=/app/config.yaml; then exec nvidia-device-plugin --config-file=/app/config.yaml; else exec tail -f /app/config.yaml; fi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          image: nvcr.io/nvidia/k8s-device-plugin:v0.19.1
+          name: nvidia-device-plugin
+          volumeMounts:
+            - mountPath: /app/config.yaml
+              name: config
+              subPath: 0600.cfg
+            - mountPath: /var/lib/kubelet/device-plugins
+              name: nvidia-device-plugin
+            - mountPath: /etc/kubernetes/node-feature-discovery/features.d
+              name: gpu-feature-discovery
+            - mountPath: /sys
+              name: sys
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/os: linux
+      #runtimeClassName: nvidia
+      priorityClassName: system-node-critical
+      tolerations:
+        - operator: Exists
+      volumes:
+        - configMap:
+            items:
+              - key: aio.yaml
+                mode: 0600
+                path: 0600.cfg
+            name: nvidia-device-plugin
+          name: config
+        - hostPath:
+            path: /var/lib/kubelet/device-plugins
+            type: DirectoryOrCreate
+          name: nvidia-device-plugin
+        - hostPath:
+            path: /etc/kubernetes/node-feature-discovery/features.d
+            type: DirectoryOrCreate
+          name: gpu-feature-discovery
+        - hostPath:
+            path: /sys
+            type: Directory
+          name: sys

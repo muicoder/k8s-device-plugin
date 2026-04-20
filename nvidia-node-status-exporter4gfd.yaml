@@ -1,0 +1,1 @@
+lifecycle: {postStart: {exec: {command: [chroot, /host, sh, -ec, KUBECONFIG=/etc/kubernetes/kubelet.conf </etc/kubernetes/node-feature-discovery/features.d/gfd xargs kubectl label --overwrite node/$(hostnamectl hostname)]}}}

@@ -1,0 +1,51 @@
+# https://github.com/GDWR/jetson_exporter
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-jetson-exporter
+spec:
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nvidia-jetson-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nvidia-jetson-exporter
+    spec:
+      containers:
+        - command:
+            - sh
+            - -ec
+            - |
+              if 2>/dev/null chroot /host dpkg -l jetson-exporter; then exec journalctl -fu jetson-exporter; fi
+              wget https://github.com/GDWR/jetson_exporter/releases/download/v0.3.1/jetson-exporter_0.3.1_arm64.deb -O/host/tmp/jetson.deb
+              if 2>/dev/null chroot /host dpkg -i /tmp/jetson.deb; then exec journalctl -fu jetson-exporter; fi || exec sleep inf
+          image: busybox:stable-glibc
+          name: nvidia-jetson-exporter
+          volumeMounts:
+            - mountPath: /host
+              name: host
+      hostNetwork: false
+      nodeSelector:
+        kubernetes.io/os: linux
+        nvidia.com/gpu.present: "true"
+      volumes:
+        - hostPath:
+            path: /
+          name: host
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+  labels:
+    app.kubernetes.io/name: nvidia-jetson-exporter
+  name: nvidia-jetson-exporter
+spec:
+  ports:
+    - name: metrics
+      port: 9102
+  selector:
+    app.kubernetes.io/name: nvidia-jetson-exporter
